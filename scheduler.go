@@ -36,6 +36,9 @@ type (
 	TaskFunc func() (status TaskStatus, when interface{})
 	//TaskFuncsMap ...
 	TaskFuncsMap map[string]TaskFunc
+
+	//TaskPlan: ключ - alias задачи, значение - интервал запуска в минутах
+	TaskPlan map[string]uint
 	// TaskFuncsCfg map[string]uint
 )
 
@@ -54,7 +57,7 @@ func New(db *gorm.DB, funcs *TaskFuncsMap) *TaskManager {
 // Configure добавляет в планировщик (или обновляет существующие)
 // обязательные задачи (карта, где ключом является alias задачи,
 // а значением - интервал запуска в минутах).
-func (tm *TaskManager) Configure(funcs map[string]uint) {
+func (tm *TaskManager) Configure(funcs TaskPlan) {
 	for alias, schedule := range funcs {
 		if _, ok := tm.funcs[alias]; ok {
 			var task Task
@@ -66,6 +69,19 @@ func (tm *TaskManager) Configure(funcs map[string]uint) {
 			}
 			tm.db.Save(&task)
 		}
+	}
+}
+
+// Add добавляет разовую (или самоуправляемую) задачу в планировщик
+func (tm *TaskManager) Add(alias string, runAt time.Time) {
+	if _, ok := tm.funcs[alias]; ok {
+		var task Task
+		tm.db.FirstOrInit(&task, Task{Alias: alias})
+		task.Status = TaskStatusWait
+
+		task.ScheduledAt = runAt
+
+		tm.db.Save(&task)
 	}
 }
 
