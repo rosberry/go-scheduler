@@ -59,7 +59,7 @@ func New(db *gorm.DB, funcs *TaskFuncsMap, sleepDuration time.Duration) *TaskMan
 		db:    db,
 		funcs: *funcs,
 		sleepDuration: func() time.Duration {
-			if sleepDuration.Seconds() < DefaultSleepDuration {
+			if sleepDuration < DefaultSleepDuration {
 				return DefaultSleepDuration
 			}
 			return sleepDuration
