@@ -49,9 +49,9 @@ func main() {
     sch := scheduler.New(db.DB, &TaskFuncsMap)
 
     //Configure task launch intervals
-        tasks := make(scheduler.TaskPlan)
-        tasks["printOneMinute"] = 1
-        sch.Configure(tasks)
+    tasks := make(scheduler.TaskPlan)
+    tasks["printOneMinute"] = 1
+    sch.Configure(tasks)
 
     //Add one-time (or autocontinue) task
     sch.Add("print", time.Now().Add(time.Minute*10))

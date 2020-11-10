@@ -33,7 +33,9 @@ type (
 		ScheduledAt time.Time
 		CreatedAt   time.Time
 		UpdatedAt   time.Time
-		Worker      string
+
+		Worker string
+		WorkAt *time.Time
 	}
 
 	//TaskFunc ...
@@ -75,13 +77,36 @@ func (tm *TaskManager) Configure(funcs TaskPlan) {
 		if _, ok := tm.funcs[alias]; ok {
 			var task Task
 			tm.db.FirstOrInit(&task, Task{Alias: alias})
-			if task.ID == 0 {
+			if task.ID == 0 { //Add
 				task.Schedule = schedule
 				task.Status = TaskStatusWait
 				task.ScheduledAt = time.Now()
 				tm.db.Save(&task)
+			} else {
+				if task.Schedule != schedule { //Update
+					go func() {
+						log.Println("[start] Update task:", alias) //FIXME: Debug, delete after all testing
+						tm.db.Model(task).Update("schedule", schedule)
+						log.Println("[end] Update task:", alias) //FIXME: Debug, delete after all testing
+					}()
+				}
 			}
+		}
+	}
+}
 
+//ClearTasks удаляет из БД задачи, которых нет в TaskManager
+func (tm *TaskManager) ClearTasks() {
+	dbTasks := make([]Task, 0)
+	tm.db.Find(&dbTasks)
+
+	for _, dbt := range dbTasks {
+		if _, ok := tm.funcs[dbt.Alias]; !ok {
+			go func() {
+				log.Println("[start] Delete task:", dbt.Alias) //FIXME: Debug, delete after all testing
+				tm.db.Delete(dbt)
+				log.Println("[end] Delete task:", dbt.Alias) //FIXME: Debug, delete after all testing
+			}()
 		}
 	}
 }
@@ -157,15 +182,22 @@ func (tm *TaskManager) exec(task *Task, fn TaskFunc, tx *gorm.DB) {
 	tx.Save(task)
 }
 
-// Add добавляет разовую (или самоуправляемую) задачу в планировщик
+// Add добавляет разовую (или самоуправляемую) задачу в планировщик. Если задача с таким alias уже есть в базе - обновляет scheduled_at
 func (tm *TaskManager) Add(alias string, runAt time.Time) {
 	if _, ok := tm.funcs[alias]; ok {
 		var task Task
 		tm.db.FirstOrInit(&task, Task{Alias: alias})
-		task.Status = TaskStatusWait
+		if task.ID == 0 { //Add
+			task.Status = TaskStatusWait
+			task.ScheduledAt = runAt
+			tm.db.Save(&task)
+		} else { //Update
+			go func() {
+				log.Println("[start] Update task:", alias) //FIXME: Debug, delete after all testing
+				tm.db.Model(task).Update("scheduled_at", runAt)
+				log.Println("[end] Update task:", alias) //FIXME: Debug, delete after all testing
+			}()
 
-		task.ScheduledAt = runAt
-
-		tm.db.Save(&task)
+		}
 	}
 }
