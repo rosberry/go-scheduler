@@ -5,6 +5,19 @@ Library to handle scheduled tasks
 
 # Usage
 1. Create table _Tasks_ in DB
+```golang
+type Task struct {
+    ID        uint `gorm:"primary_key"`
+    CreatedAt time.Time
+    UpdatedAt time.Time
+
+    Alias       string
+    Status      uint
+    Schedule    uint
+    ScheduledAt time.Time
+    Worker      string
+}
+```
 
 
 2. Usage
@@ -55,6 +68,7 @@ func main() {
 # Roadmap
 - [x] Scheduled tasks
 - [x] Once tasks 
-- [ ] Concurency
-- [ ] Transactions
+- [x] Concurency
+- [x] Transactions
+- [ ] Configure tasks
 - [ ] ... 

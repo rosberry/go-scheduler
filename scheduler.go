@@ -5,10 +5,12 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+
+	"github.com/google/uuid"
 )
 
 const (
-	SleepDuration = 30 * time.Second
+	DefaultSleepDuration = 30 * time.Second
 )
 
 type (
@@ -16,9 +18,10 @@ type (
 
 	//TaskManager base
 	TaskManager struct {
-		db *gorm.DB
-		//locator locator.Locator
-		funcs TaskFuncsMap
+		id            string
+		db            *gorm.DB
+		funcs         TaskFuncsMap
+		sleepDuration time.Duration
 	}
 
 	//Task ...
@@ -30,6 +33,7 @@ type (
 		ScheduledAt time.Time
 		CreatedAt   time.Time
 		UpdatedAt   time.Time
+		Worker      string
 	}
 
 	//TaskFunc ...
@@ -37,9 +41,8 @@ type (
 	//TaskFuncsMap ...
 	TaskFuncsMap map[string]TaskFunc
 
-	//TaskPlan: ключ - alias задачи, значение - интервал запуска в минутах
+	//TaskPlan - список для первичной настройки задач (ключ - alias задачи, значение - интервал запуска в минутах)
 	TaskPlan map[string]uint
-	// TaskFuncsCfg map[string]uint
 )
 
 const (
@@ -50,8 +53,18 @@ const (
 )
 
 // New создает экземпляр планировщика
-func New(db *gorm.DB, funcs *TaskFuncsMap) *TaskManager {
-	return &TaskManager{db, *funcs}
+func New(db *gorm.DB, funcs *TaskFuncsMap, sleepDuration time.Duration) *TaskManager {
+	return &TaskManager{
+		id:    uuid.New().String(),
+		db:    db,
+		funcs: *funcs,
+		sleepDuration: func() time.Duration {
+			if sleepDuration.Seconds() < DefaultSleepDuration {
+				return DefaultSleepDuration
+			}
+			return sleepDuration
+		}(),
+	}
 }
 
 // Configure добавляет в планировщик (или обновляет существующие)
@@ -62,67 +75,69 @@ func (tm *TaskManager) Configure(funcs TaskPlan) {
 		if _, ok := tm.funcs[alias]; ok {
 			var task Task
 			tm.db.FirstOrInit(&task, Task{Alias: alias})
-			task.Schedule = schedule
-			task.Status = TaskStatusWait
 			if task.ID == 0 {
+				task.Schedule = schedule
+				task.Status = TaskStatusWait
 				task.ScheduledAt = time.Now()
+				tm.db.Save(&task)
 			}
-			tm.db.Save(&task)
+
 		}
-	}
-}
-
-// Add добавляет разовую (или самоуправляемую) задачу в планировщик
-func (tm *TaskManager) Add(alias string, runAt time.Time) {
-	if _, ok := tm.funcs[alias]; ok {
-		var task Task
-		tm.db.FirstOrInit(&task, Task{Alias: alias})
-		task.Status = TaskStatusWait
-
-		task.ScheduledAt = runAt
-
-		tm.db.Save(&task)
 	}
 }
 
 // Run запускает бесконечный цикл планировщика
 func (tm *TaskManager) Run() {
 	for {
-		var task Task
-		tm.db.Where("status = ?", TaskStatusWait).Where("scheduled_at < ?", time.Now()).First(&task)
-		if task.ID == 0 {
-			time.Sleep(SleepDuration)
-		} else {
-			if fn, ok := tm.funcs[task.Alias]; ok {
-				task.Status = TaskStatusInProgress
-				tm.db.Save(&task)
-				go tm.exec(&task, fn)
-			} else {
-				task.Status = TaskStatusDeferred
-				tm.db.Save(&task)
+		tm.db.Transaction(func(tx *gorm.DB) error {
+			var task Task
+			err := tx.Raw(`
+			UPDATE tasks SET worker = ? 
+			WHERE id = (SELECT id FROM tasks WHERE scheduled_at < now() and (worker is null or worker = '') ORDER BY scheduled_at LIMIT 1 FOR UPDATE SKIP LOCKED) 
+			RETURNING *;
+			`, tm.id).Scan(&task).Error
+			if err != nil {
+				log.Println(err)
 			}
-		}
+
+			if task.ID == 0 {
+				time.Sleep(tm.sleepDuration)
+			} else {
+				if fn, ok := tm.funcs[task.Alias]; ok {
+					task.Status = TaskStatusInProgress
+					tx.Save(&task)
+					tm.exec(&task, fn, tx)
+
+				} else {
+					task.Status = TaskStatusDeferred
+					tx.Save(&task)
+				}
+			}
+			return nil
+		})
 	}
 }
 
 // Выполнение задачи с восстановлением из паники,
 // смена статуса задачи и установка нового времени
 // планирования задачи после ее выполнения.
-func (tm *TaskManager) exec(task *Task, fn TaskFunc) {
+func (tm *TaskManager) exec(task *Task, fn TaskFunc, tx *gorm.DB) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("[Scheduler][Recovery %s] panic recovered:\n%s\n\n", task.Alias, r)
 			task.Status = TaskStatusWait
+			task.Worker = ""
 			if task.Schedule > 0 {
 				task.ScheduledAt = task.ScheduledAt.Add(time.Minute * time.Duration(task.Schedule))
 			}
-			tm.db.Save(task)
+			tx.Save(task)
 		}
 	}()
 	status, when := fn()
 	switch status {
 	case TaskStatusDone, TaskStatusWait, TaskStatusDeferred:
 		task.Status = status
+		task.Worker = ""
 	default:
 		task.Status = TaskStatusDeferred
 	}
@@ -139,5 +154,18 @@ func (tm *TaskManager) exec(task *Task, fn TaskFunc) {
 			task.Status = TaskStatusDeferred
 		}
 	}
-	tm.db.Save(task)
+	tx.Save(task)
+}
+
+// Add добавляет разовую (или самоуправляемую) задачу в планировщик
+func (tm *TaskManager) Add(alias string, runAt time.Time) {
+	if _, ok := tm.funcs[alias]; ok {
+		var task Task
+		tm.db.FirstOrInit(&task, Task{Alias: alias})
+		task.Status = TaskStatusWait
+
+		task.ScheduledAt = runAt
+
+		tm.db.Save(&task)
+	}
 }
