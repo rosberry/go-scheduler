@@ -4,9 +4,8 @@ import (
 	"log"
 	"time"
 
-	"gorm.io/gorm"
-
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 const (
@@ -84,6 +83,7 @@ func (tm *TaskManager) Configure(funcs TaskPlan) {
 				tm.db.Save(&task)
 			} else {
 				if task.Schedule != schedule { //Update
+					log.Printf("task.Schedule (%s) != schedule (%s)\n", task.Schedule, schedule)
 					go func() {
 						log.Println("[start] Update task:", alias) //FIXME: Debug, delete after all testing
 						tm.db.Model(task).Update("schedule", schedule)
@@ -126,11 +126,11 @@ func (tm *TaskManager) Run() {
 			}
 
 			if task.ID == 0 {
-				time.Sleep(tm.sleepDuration)
+				time.Sleep(tm.sleepDuration) // (??) Sleep in transaction?
 			} else {
 				if fn, ok := tm.funcs[task.Alias]; ok {
-					task.Status = TaskStatusInProgress
-					tx.Save(&task)
+					//task.Status = TaskStatusInProgress
+					//tx.Save(&task)
 					tm.exec(&task, fn, tx)
 
 				} else {
@@ -192,12 +192,13 @@ func (tm *TaskManager) Add(alias string, runAt time.Time) {
 			task.ScheduledAt = runAt
 			tm.db.Save(&task)
 		} else { //Update
-			go func() {
-				log.Println("[start] Update task:", alias) //FIXME: Debug, delete after all testing
-				tm.db.Model(task).Update("scheduled_at", runAt)
-				log.Println("[end] Update task:", alias) //FIXME: Debug, delete after all testing
-			}()
-
+			if task.ScheduledAt != runAt {
+				go func() {
+					log.Println("[start] Update task:", alias) //FIXME: Debug, delete after all testing
+					tm.db.Model(task).Update("scheduled_at", runAt)
+					log.Println("[end] Update task:", alias) //FIXME: Debug, delete after all testing
+				}()
+			}
 		}
 	}
 }
