@@ -46,7 +46,7 @@ func main() {
     }
 
     //Init scheduler
-    sch := scheduler.New(db.DB, &TaskFuncsMap)
+    sch := scheduler.New(db.DB, &TaskFuncsMap, time.Minute)
 
     //Configure task launch intervals
     tasks := make(scheduler.TaskPlan)
