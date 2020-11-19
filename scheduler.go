@@ -34,7 +34,6 @@ type (
 		UpdatedAt   time.Time
 
 		Worker string
-		WorkAt *time.Time
 	}
 
 	//TaskFunc ...
