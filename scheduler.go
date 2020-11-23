@@ -23,7 +23,7 @@ type (
 		sleepDuration time.Duration
 	}
 
-	//Task ...
+	//Task
 	Task struct {
 		ID          uint `gorm:"primary_key"`
 		Alias       string
@@ -32,16 +32,14 @@ type (
 		ScheduledAt time.Time
 		CreatedAt   time.Time
 		UpdatedAt   time.Time
-
-		Worker string
 	}
 
-	//TaskFunc ...
+	//TaskFunc type func by task
 	TaskFunc func() (status TaskStatus, when interface{})
-	//TaskFuncsMap ...
+	//TaskFuncsMap - list by TaskFunc's (key - task alias, value - TaskFunc)
 	TaskFuncsMap map[string]TaskFunc
 
-	//TaskPlan - список для первичной настройки задач (ключ - alias задачи, значение - интервал запуска в минутах)
+	//TaskPlan - list for initializing tasks (key - task alias, value - start interval in minutes)
 	TaskPlan map[string]uint
 )
 
@@ -52,7 +50,7 @@ const (
 	TaskStatusDone
 )
 
-// New создает экземпляр планировщика
+// New TaskManager
 func New(db *gorm.DB, funcs *TaskFuncsMap, sleepDuration time.Duration) *TaskManager {
 	return &TaskManager{
 		id:    uuid.New().String(),
@@ -67,9 +65,7 @@ func New(db *gorm.DB, funcs *TaskFuncsMap, sleepDuration time.Duration) *TaskMan
 	}
 }
 
-// Configure добавляет в планировщик (или обновляет существующие)
-// обязательные задачи (карта, где ключом является alias задачи,
-// а значением - интервал запуска в минутах).
+// Configure add (or update if exist) tasks to TaskManager from TaskPlan
 func (tm *TaskManager) Configure(funcs TaskPlan) {
 	for alias, schedule := range funcs {
 		if _, ok := tm.funcs[alias]; ok {
@@ -82,11 +78,8 @@ func (tm *TaskManager) Configure(funcs TaskPlan) {
 				tm.db.Save(&task)
 			} else {
 				if task.Schedule != schedule { //Update
-					log.Printf("task.Schedule (%s) != schedule (%s)\n", task.Schedule, schedule)
 					go func() {
-						log.Println("[start] Update task:", alias) //FIXME: Debug, delete after all testing
 						tm.db.Model(task).Update("schedule", schedule)
-						log.Println("[end] Update task:", alias) //FIXME: Debug, delete after all testing
 					}()
 				}
 			}
@@ -94,7 +87,7 @@ func (tm *TaskManager) Configure(funcs TaskPlan) {
 	}
 }
 
-//ClearTasks удаляет из БД задачи, которых нет в TaskManager
+//ClearTasks Removes tasks from DB if they are not in TaskManager
 func (tm *TaskManager) ClearTasks() {
 	dbTasks := make([]Task, 0)
 	tm.db.Find(&dbTasks)
@@ -102,24 +95,22 @@ func (tm *TaskManager) ClearTasks() {
 	for _, dbt := range dbTasks {
 		if _, ok := tm.funcs[dbt.Alias]; !ok {
 			go func() {
-				log.Println("[start] Delete task:", dbt.Alias) //FIXME: Debug, delete after all testing
 				tm.db.Delete(dbt)
-				log.Println("[end] Delete task:", dbt.Alias) //FIXME: Debug, delete after all testing
 			}()
 		}
 	}
 }
 
-// Run запускает бесконечный цикл планировщика
+// Run infinite TaskManager loop
 func (tm *TaskManager) Run() {
 	for {
 		tm.db.Transaction(func(tx *gorm.DB) error {
 			var task Task
 			err := tx.Raw(`
-			UPDATE tasks SET worker = ? 
-			WHERE id = (SELECT id FROM tasks WHERE scheduled_at < now() and (worker is null or worker = '') ORDER BY scheduled_at LIMIT 1 FOR UPDATE SKIP LOCKED) 
+			UPDATE tasks SET updated_at = ? 
+			WHERE id = (SELECT id FROM tasks WHERE scheduled_at < now() ORDER BY scheduled_at LIMIT 1 FOR UPDATE SKIP LOCKED) 
 			RETURNING *;
-			`, tm.id).Scan(&task).Error
+			`, time.Now()).Scan(&task).Error
 			if err != nil {
 				log.Println(err)
 			}
@@ -128,8 +119,6 @@ func (tm *TaskManager) Run() {
 				time.Sleep(tm.sleepDuration) // (??) Sleep in transaction?
 			} else {
 				if fn, ok := tm.funcs[task.Alias]; ok {
-					//task.Status = TaskStatusInProgress
-					//tx.Save(&task)
 					tm.exec(&task, fn, tx)
 
 				} else {
@@ -142,15 +131,14 @@ func (tm *TaskManager) Run() {
 	}
 }
 
-// Выполнение задачи с восстановлением из паники,
-// смена статуса задачи и установка нового времени
-// планирования задачи после ее выполнения.
+// Executing a task with panic recovery,
+// changing the task status and
+// setting a new task scheduling time after its completion.
 func (tm *TaskManager) exec(task *Task, fn TaskFunc, tx *gorm.DB) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("[Scheduler][Recovery %s] panic recovered:\n%s\n\n", task.Alias, r)
 			task.Status = TaskStatusWait
-			task.Worker = ""
 			if task.Schedule > 0 {
 				task.ScheduledAt = task.ScheduledAt.Add(time.Minute * time.Duration(task.Schedule))
 			}
@@ -161,7 +149,6 @@ func (tm *TaskManager) exec(task *Task, fn TaskFunc, tx *gorm.DB) {
 	switch status {
 	case TaskStatusDone, TaskStatusWait, TaskStatusDeferred:
 		task.Status = status
-		task.Worker = ""
 	default:
 		task.Status = TaskStatusDeferred
 	}
@@ -181,7 +168,8 @@ func (tm *TaskManager) exec(task *Task, fn TaskFunc, tx *gorm.DB) {
 	tx.Save(task)
 }
 
-// Add добавляет разовую (или самоуправляемую) задачу в планировщик. Если задача с таким alias уже есть в базе - обновляет scheduled_at
+// Add a one-time (or self-managed) task to the scheduler.
+// If a task with such a key is already in the database, it updates scheduled_at
 func (tm *TaskManager) Add(alias string, runAt time.Time) {
 	if _, ok := tm.funcs[alias]; ok {
 		var task Task
@@ -193,9 +181,7 @@ func (tm *TaskManager) Add(alias string, runAt time.Time) {
 		} else { //Update
 			if task.ScheduledAt != runAt {
 				go func() {
-					log.Println("[start] Update task:", alias) //FIXME: Debug, delete after all testing
 					tm.db.Model(task).Update("scheduled_at", runAt)
-					log.Println("[end] Update task:", alias) //FIXME: Debug, delete after all testing
 				}()
 			}
 		}

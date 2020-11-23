@@ -15,7 +15,6 @@ type Task struct {
     Status      uint
     Schedule    uint
     ScheduledAt time.Time
-    Worker      string
 }
 ```
 
