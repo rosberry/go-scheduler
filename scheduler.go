@@ -104,7 +104,14 @@ func (tm *TaskManager) ClearTasks() {
 // Run infinite TaskManager loop
 func (tm *TaskManager) Run() {
 	for {
-		tm.db.Transaction(func(tx *gorm.DB) error {
+		func() {
+			tx := tm.db.Begin()
+			defer func() {
+				if r := recover(); r != nil {
+					tx.Rollback()
+				}
+			}()
+
 			var task Task
 			err := tx.Raw(`
 			UPDATE tasks SET updated_at = ? 
@@ -116,18 +123,18 @@ func (tm *TaskManager) Run() {
 			}
 
 			if task.ID == 0 {
-				time.Sleep(tm.sleepDuration) // (??) Sleep in transaction?
+				tx.Rollback()
+				time.Sleep(tm.sleepDuration)
 			} else {
 				if fn, ok := tm.funcs[task.Alias]; ok {
-					tm.exec(&task, fn, tx)
-
+					go tm.exec(&task, fn, tx)
 				} else {
 					task.Status = TaskStatusDeferred
 					tx.Save(&task)
+					tx.Commit()
 				}
 			}
-			return nil
-		})
+		}()
 	}
 }
 
@@ -143,6 +150,7 @@ func (tm *TaskManager) exec(task *Task, fn TaskFunc, tx *gorm.DB) {
 				task.ScheduledAt = task.ScheduledAt.Add(time.Minute * time.Duration(task.Schedule))
 			}
 			tx.Save(task)
+			tx.Commit()
 		}
 	}()
 	status, when := fn()
@@ -166,6 +174,7 @@ func (tm *TaskManager) exec(task *Task, fn TaskFunc, tx *gorm.DB) {
 		}
 	}
 	tx.Save(task)
+	tx.Commit()
 }
 
 // Add a one-time (or self-managed) task to the scheduler.
