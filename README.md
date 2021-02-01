@@ -1,6 +1,7 @@
 # Scheduler
 
-Library to handle scheduled tasks
+This is a library to handle scheduled tasks.
+The task list is stored in the database (GORM).
 
 
 # Usage
