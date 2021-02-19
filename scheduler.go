@@ -114,10 +114,13 @@ func (tm *TaskManager) Run() {
 
 			var task Task
 			err := tx.Raw(`
-			UPDATE tasks SET updated_at = ? 
-			WHERE id = (SELECT id FROM tasks WHERE scheduled_at < now() ORDER BY scheduled_at LIMIT 1 FOR UPDATE SKIP LOCKED) 
+			UPDATE tasks SET updated_at = ?
+			WHERE id = (SELECT id FROM tasks WHERE scheduled_at < now() AND status = ? ORDER BY scheduled_at LIMIT 1 FOR UPDATE SKIP LOCKED)
 			RETURNING *;
-			`, time.Now()).Scan(&task).Error
+			`,
+			time.Now(),
+			TaskStatusWait,
+			).Scan(&task).Error
 			if err != nil {
 				log.Println(err)
 			}
