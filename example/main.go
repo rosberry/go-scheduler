@@ -1,33 +1,3 @@
-# Scheduler
-
-This is a library to handle scheduled tasks.
-The task list is stored in the database (GORM).
-
-# Usage
-
-1. Create table _Tasks_ in DB
-
-```golang
-type Task struct {
-    ID    uint `gorm:"primary_key"`
-    Alias string
-
-    Name       string
-    Arguments  string
-    Singletone bool
-
-    Status      TaskStatus
-    Schedule    uint
-    ScheduledAt time.Time
-
-    CreatedAt time.Time
-    UpdatedAt time.Time
-}
-```
-
-2. Usage
-
-```golang
 package main
 
 import (
@@ -40,15 +10,11 @@ import (
 	"gorm.io/gorm"
 )
 
-const (
-	sleepDuration           = time.Minute
-	updPrintScheduleTimeout = 5
-)
+const sleepDuration = time.Minute
 
 func main() {
 	// Connect to DB
 	connString := "host=localhost port=5432 user=postgres dbname=clapper password=123 sslmode=disable"
-
 	db, err := gorm.Open(postgres.Open(connString), &gorm.Config{})
 	if err != nil {
 		log.Fatal(err)
@@ -62,7 +28,7 @@ func main() {
 
 	// Init TaskPlan for Singletone functions
 	taskPlan := scheduler.TaskPlan{
-		"upd_print": updPrintScheduleTimeout,
+		"upd_print": 5,
 	}
 
 	// Init scheduler
@@ -109,30 +75,3 @@ func PrintWithArgs(args scheduler.FuncArgs) (status scheduler.TaskStatus, when i
 
 	return scheduler.TaskStatusDeferred, time.Now().Add(time.Minute * 1)
 }
-```
-
-# Task types
-
-- Singletone - unique task, can be only one task with alias in DB.
-- Not singletone - dynamic task, that can be created while the program is running, supports arguments, there can be several tasks in the database with one alias.
-
-# Roadmap
-
-- [x] Scheduled tasks
-- [x] Once tasks
-- [x] Concurency
-- [x] Transactions
-- [ ] Configure tasks
-- [ ] ...
-
-## About
-
-<img src="https://github.com/rosberry/Foundation/blob/master/Assets/full_logo.png?raw=true" height="100" />
-
-This project is owned and maintained by [Rosberry](http://rosberry.com). We build mobile apps for users worldwide 🌏.
-
-Check out our [open source projects](https://github.com/rosberry), read [our blog](https://medium.com/@Rosberry) or give us a high-five on 🐦 [@rosberryapps](http://twitter.com/RosberryApps).
-
-## License
-
-This project is available under the MIT license. See the LICENSE file for more info.
