@@ -30,9 +30,9 @@ type (
 		ID    uint `gorm:"primary_key"`
 		Alias string
 
-		Name       string
-		Arguments  string
-		Singletone bool
+		Name      string
+		Arguments string
+		Singleton bool
 
 		Status      TaskStatus
 		Schedule    uint
@@ -47,7 +47,7 @@ type (
 	// TaskFuncsMap - list by TaskFunc's (key - task alias, value - TaskFunc)
 	TaskFuncsMap map[string]TaskFunc
 
-	// TaskPlan - list for initializing singletone tasks (key - task alias, value - start interval in minutes)
+	// TaskPlan - list for initializing singleton tasks (key - task alias, value - start interval in minutes)
 	TaskPlan map[string]uint
 	FuncArgs map[string]interface{}
 )
@@ -88,7 +88,7 @@ func (tm *TaskManager) Configure(funcs TaskPlan) {
 				task.Schedule = schedule
 				task.Status = TaskStatusWait
 				task.ScheduledAt = time.Now()
-				task.Singletone = true
+				task.Singleton = true
 				tm.db.Save(&task)
 			} else if task.Schedule != schedule { // Update
 				go func() {
@@ -203,7 +203,7 @@ func (tm *TaskManager) exec(task *Task, fn TaskFunc, tx *gorm.DB) {
 	tx.Commit()
 }
 
-// Add new no-Singletone task in DB
+// Add new no-Singleton task in DB
 func (tm *TaskManager) Add(alias string, name string, args FuncArgs, runAt time.Time, intervalMinutes uint) error {
 	if _, ok := tm.funcs[alias]; !ok {
 		return ErrFuncNotFoundInTaskFuncsMap
