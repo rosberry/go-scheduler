@@ -1,11 +1,17 @@
-# Scheduler
+# Scheduler ![https://img.shields.io/badge/golang-1.15-blue](https://img.shields.io/badge/golang-1.15-blue)
 
 This is a library to handle scheduled tasks.
 The task list is stored in the database (GORM).
 
 # Usage
 
-1. Create table _Tasks_ in DB
+1. Import the library.
+
+```golang
+import "github.com/rosberry/go-scheduler"
+```
+
+2. Use `gorm` ORM library to work with the database in the scheduler, create a model according to the example below and roll the migrations.
 
 ```golang
 type Task struct {
@@ -24,9 +30,45 @@ type Task struct {
     UpdatedAt time.Time
 }
 ```
+3. Create schedule functions and add them to the special map `scheduler.TaskFuncsMap`. Each function must return 2 parameters. The first is the status after the completion of the task. Possible options: `TaskStatusDone`, `TaskStatusWait`, `TaskStatusDeferred`. The second is how long it will take to call this task again. The passed types can be: `time.Duration`, `time.Time` or `nil`. If the time was not transmitted (nil was used), then we will use the static values stored in the database for this task. More on this later.
 
-2. Usage
+```golang
 
+func PrintJobSingletone(args scheduler.FuncArgs) (status scheduler.TaskStatus, when interface{}) {
+	log.Println("PrintJobSingletone:", time.Now())
+
+	return scheduler.TaskStatusWait, time.Now().Add(time.Minute * 1)
+}
+
+// in the running script
+...
+taskFuncsMap := scheduler.TaskFuncsMap{
+	"upd_print": PrintJobSingletone,
+}
+```
+
+4. Initialize the scheduler. gorm db in first function argument. The second argument is the `taskFuncMap` map declared earlier. The third argument is the time interval between checking tasks. By default it is 30 seconds and can be set up no less than this value.
+
+```golang
+sch := scheduler.New(db, &taskFuncsMap, sleepDuration)
+```
+
+5. You can add a static interval for the execution of tasks. If a time is specified for a task, then it will be singleton.
+
+```golang
+taskPlan := scheduler.TaskPlan{
+	"upd_print": updPrintScheduleTimeout,
+}
+sch.Configure(taskPlan)
+```
+
+6. run scheduler in go routine
+
+```golang
+go sch.Run()
+```
+
+Full example:
 ```golang
 package main
 
