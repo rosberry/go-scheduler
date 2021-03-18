@@ -1,4 +1,4 @@
-module github.com/rosberry/go-schedule
+module github.com/rosberry/go-scheduler
 
 go 1.14
 
