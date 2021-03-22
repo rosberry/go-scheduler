@@ -20,7 +20,7 @@ type Task struct {
 
     Name       string
     Arguments  string
-    Singletone bool
+    Singleton bool
 
     Status      TaskStatus
     Schedule    uint
