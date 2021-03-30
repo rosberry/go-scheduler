@@ -64,15 +64,10 @@ var ErrFuncNotFoundInTaskFuncsMap = errors.New("function not found in TaskFuncsM
 // New TaskManager
 func New(db *gorm.DB, funcs *TaskFuncsMap, sleepDuration time.Duration) *TaskManager {
 	return &TaskManager{
-		id:    uuid.New().String(),
-		db:    db,
-		funcs: *funcs,
-		sleepDuration: func() time.Duration {
-			if sleepDuration < DefaultSleepDuration {
-				return DefaultSleepDuration
-			}
-			return sleepDuration
-		}(),
+		id:            uuid.New().String(),
+		db:            db,
+		funcs:         *funcs,
+		sleepDuration: sleepDuration,
 	}
 }
 
