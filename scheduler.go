@@ -43,6 +43,18 @@ type (
 		UpdatedAt time.Time
 	}
 
+	// Aggregate config for new scheduler
+	Config struct {
+		Sleep time.Duration
+		Jobs  TaskSettings
+	}
+
+	// Aggregate settings for jobs
+	TaskSettings map[string]struct {
+		Func     TaskFunc
+		Interval uint
+	}
+
 	// TaskFunc type func by task
 	TaskFunc func(args FuncArgs) (status TaskStatus, when interface{})
 	// TaskFuncsMap - list by TaskFunc's (key - task alias, value - TaskFunc)
@@ -77,6 +89,23 @@ func New(db *gorm.DB, funcs *TaskFuncsMap, sleepDuration time.Duration) *TaskMan
 		funcs:         *funcs,
 		sleepDuration: sleep,
 	}
+}
+
+// New TaskManager with config
+func NewWithConfig(db *gorm.DB, c Config) *TaskManager {
+	taskFuncsMap := TaskFuncsMap{}
+	taskPlan := TaskPlan{}
+
+	for alias, item := range c.Jobs {
+		taskFuncsMap[alias] = item.Func
+		taskPlan[alias] = item.Interval
+	}
+
+	taskManager := New(db, &taskFuncsMap, c.Sleep)
+
+	taskManager.Configure(taskPlan)
+
+	return taskManager
 }
 
 // Configure add (or update if exist) tasks to TaskManager from TaskPlan
