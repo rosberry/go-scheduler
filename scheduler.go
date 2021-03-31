@@ -12,6 +12,7 @@ import (
 
 const (
 	DefaultSleepDuration = 30 * time.Second
+	MinimalSleepDuration = 1 * time.Second
 )
 
 type (
@@ -63,11 +64,18 @@ var ErrFuncNotFoundInTaskFuncsMap = errors.New("function not found in TaskFuncsM
 
 // New TaskManager
 func New(db *gorm.DB, funcs *TaskFuncsMap, sleepDuration time.Duration) *TaskManager {
+	sleep := sleepDuration
+	if sleep == 0 {
+		sleep = DefaultSleepDuration
+	} else if sleep < MinimalSleepDuration {
+		sleep = MinimalSleepDuration
+	}
+
 	return &TaskManager{
 		id:            uuid.New().String(),
 		db:            db,
 		funcs:         *funcs,
-		sleepDuration: sleepDuration,
+		sleepDuration: sleep,
 	}
 }
 
