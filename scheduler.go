@@ -52,6 +52,7 @@ type (
 	// Aggregate settings for jobs
 	TaskSettings map[string]struct {
 		Func     TaskFunc
+		Args     FuncArgs
 		Interval uint
 	}
 
@@ -94,18 +95,60 @@ func New(db *gorm.DB, funcs *TaskFuncsMap, sleepDuration time.Duration) *TaskMan
 // New TaskManager with config
 func NewWithConfig(db *gorm.DB, c Config) *TaskManager {
 	taskFuncsMap := TaskFuncsMap{}
-	taskPlan := TaskPlan{}
 
 	for alias, item := range c.Jobs {
 		taskFuncsMap[alias] = item.Func
-		taskPlan[alias] = item.Interval
 	}
 
 	taskManager := New(db, &taskFuncsMap, c.Sleep)
 
-	taskManager.Configure(taskPlan)
+	taskManager.SetTasks(c.Jobs)
 
 	return taskManager
+}
+
+// Configure add (or update if exist) tasks to TaskManager from TaskSettings
+func (tm *TaskManager) SetTasks(ts TaskSettings) {
+	for alias, item := range ts {
+		if _, ok := tm.funcs[alias]; ok {
+			var task Task
+
+			tm.db.FirstOrInit(&task, Task{Alias: alias})
+
+			argsStr := item.Args.String()
+
+			if task.ID == 0 { // Add
+				task.Schedule = item.Interval
+				task.Status = TaskStatusWait
+				task.ScheduledAt = time.Now()
+				task.Singleton = true
+				// save arguments if exist literal initialization and map not empty
+				if item.Args != nil && len(item.Args) > 0 {
+					task.Arguments = argsStr
+				}
+
+				tm.db.Save(&task)
+			} else { // update
+				updateMap := make(map[string]interface{})
+				if task.Schedule != item.Interval {
+					updateMap["schedule"] = item.Interval
+				}
+				// update arguments if exist literal initialization
+				if item.Args != nil && task.Arguments != argsStr {
+					// if exist initialization want do empty string
+					if len(item.Args) == 0 {
+						argsStr = ""
+					}
+					updateMap["arguments"] = argsStr
+				}
+				if len(updateMap) > 0 {
+					go func() {
+						tm.db.Model(task).Updates(updateMap)
+					}()
+				}
+			}
+		}
+	}
 }
 
 // Configure add (or update if exist) tasks to TaskManager from TaskPlan
