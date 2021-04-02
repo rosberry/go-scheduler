@@ -21,7 +21,6 @@ const (
 	dbConnectionError         = "db connection error"
 	succeessChannelStatus     = "success"
 	timeoutErrorChannelStatus = "error timeout operation"
-	wrongCountChannelStatus   = "wrong count"
 )
 
 var arrColNames = []string{"id", "alias", "name", "arguments", "singleton", "status", "schedule", "scheduled_at", "created_at", "updated_at"}
@@ -44,7 +43,6 @@ type (
 	}
 
 	observerTask struct {
-		Name  string
 		Count uint
 	}
 
@@ -84,14 +82,12 @@ func TestStart(test *testing.T) {
 		abortProcess := false
 
 		Convey("\nWhen we want to check table with tasks and we want check this table correct structure\n", func(convey C) {
-			test.Run("Main=check_db_table", func(test *testing.T) {
-				err := db.Select(arrColNames).Find(&task{}).Error
-				if err != nil {
-					abortProcess = true
-				}
-				convey.Convey("Database errors should be free", func() {
-					convey.So(err, ShouldBeNil)
-				})
+			err := db.Select(arrColNames).Find(&task{}).Error
+			if err != nil {
+				abortProcess = true
+			}
+			convey.Convey("Database errors should be free", func() {
+				convey.So(err, ShouldBeNil)
 			})
 		})
 		if abortProcess {
@@ -99,190 +95,261 @@ func TestStart(test *testing.T) {
 		}
 
 		Convey("\nWhen we want to make sure that the task is correct created in the database\n", func(convey C) {
-			test.Run("Main=add", func(test *testing.T) {
-				timeToRun := time.Second * 10
-				args := scheduler.FuncArgs{
-					"arg1": 1,
-					"arg2": "test",
-				}
-				testObj := task{
-					Alias:       "Test Alias " + createUniqueName(),
-					Name:        "Test Name " + createUniqueName(),
-					Arguments:   args.String(),
-					ScheduledAt: time.Now().Add(timeToRun),
-				}
+			timeToRun := time.Second * 10
+			args := scheduler.FuncArgs{
+				"arg1": 1,
+				"arg2": "test",
+			}
+			testObj := task{
+				Alias:       "Test Alias " + createUniqueName(),
+				Name:        "Test Name " + createUniqueName(),
+				Arguments:   args.String(),
+				ScheduledAt: time.Now().Add(timeToRun),
+			}
 
-				taskFuncsMap := scheduler.TaskFuncsMap{
-					testObj.Alias: baseJob,
-				}
+			taskFuncsMap := scheduler.TaskFuncsMap{
+				testObj.Alias: baseJob,
+			}
 
-				taskManager := scheduler.New(db, &taskFuncsMap, scheduler.DefaultSleepDuration)
+			taskManager := scheduler.New(db, &taskFuncsMap, scheduler.DefaultSleepDuration)
 
-				err := taskManager.Add(
-					testObj.Alias,
-					testObj.Name,
-					args,
-					testObj.ScheduledAt,
-					0,
-				)
+			err := taskManager.Add(
+				testObj.Alias,
+				testObj.Name,
+				args,
+				testObj.ScheduledAt,
+				0,
+			)
 
-				convey.Convey("We check that we have not have an error in the process of adding a task", func() {
-					convey.So(err, ShouldBeNil)
-				})
-				if err != nil {
-					return
-				}
-
-				respTask := &task{}
-				err = db.Where(map[string]interface{}{
-					"alias":     testObj.Alias,
-					"name":      testObj.Name,
-					"arguments": testObj.Arguments,
-				}).First(respTask).Error
-				convey.Convey("We check that we have not have an error in the process of getting a task in database", func() {
-					convey.So(err, ShouldBeNil)
-				})
-				if err != nil {
-					return
-				}
-
-				convey.Convey("We expect that the test execution time of the task corresponds to the value of the task execution time from the database, accurate to the second", func() {
-					testTime := testObj.ScheduledAt.Round(time.Second)
-					respTime := respTask.ScheduledAt.Round(time.Second)
-					convey.So(testTime, ShouldEqual, respTime)
-				})
-
-				db.Where("alias = ?", testObj.Alias).Delete(&task{})
+			convey.Convey("We check that we have not have an error in the process of adding a task", func() {
+				convey.So(err, ShouldBeNil)
 			})
+			if err != nil {
+				return
+			}
+
+			respTask := &task{}
+			err = db.Where(map[string]interface{}{
+				"alias":     testObj.Alias,
+				"name":      testObj.Name,
+				"arguments": testObj.Arguments,
+			}).First(respTask).Error
+			convey.Convey("We check that we have not have an error in the process of getting a task in database", func() {
+				convey.So(err, ShouldBeNil)
+			})
+			if err != nil {
+				return
+			}
+
+			convey.Convey("We expect that the test execution time of the task corresponds to the value of the task execution time from the database, accurate to the second", func() {
+				testTime := testObj.ScheduledAt.Round(time.Second)
+				respTime := respTask.ScheduledAt.Round(time.Second)
+				convey.So(testTime, ShouldEqual, respTime)
+			})
+
+			db.Where("alias = ?", testObj.Alias).Delete(&task{})
 		})
 
 		Convey("\nWhen we want to make sure that scheduler base run is correct\n", func(convey C) {
-			test.Run("Main=run", func(t *testing.T) {
-				var timeCoef uint = 3
-				var rightCount uint = 2
-				timeToRun := time.Duration(timeCoef) * time.Second
+			testName := "simple run"
+			const timeCoef uint = 3
+			const rightCount uint = 2
+			timeToRun := time.Duration(timeCoef) * time.Second
 
-				testName := "Test run Alias " + createUniqueName()
-				args := scheduler.FuncArgs{
-					"name":       testName,
-					"duration":   timeToRun,
-					"rightCount": rightCount,
-				}
+			taskName := "Test run with config"
+			args := scheduler.FuncArgs{
+				"name":       taskName,
+				"duration":   timeToRun,
+				"rightCount": rightCount,
+			}
 
-				testObj := task{
-					Alias:       testName,
-					Name:        "Test run Name " + createUniqueName(),
-					Arguments:   args.String(),
-					ScheduledAt: time.Now().Add(timeToRun),
-				}
+			testObj := task{
+				Alias:     taskName,
+				Arguments: args.String(),
+			}
 
-				taskFuncsMap := scheduler.TaskFuncsMap{
-					testObj.Alias: channelJob,
-				}
-
-				taskManager := scheduler.New(db, &taskFuncsMap, time.Second*1)
-
-				err = taskManager.Add(
-					testObj.Alias,
-					testObj.Name,
-					args,
-					testObj.ScheduledAt,
-					timeCoef,
-				)
-				convey.Convey("We check that we have not have an error in the process of adding a task", func() {
-					convey.So(err, ShouldBeNil)
-				})
-				if err != nil {
-					return
-				}
-
-				observer.TestName = "Main=run"
-				observer.StatusChannel = make(chan string, 10)
-				observer.Tasks = make(map[string]*observerTask)
-				observer.Count = 0
-
-				convey.Convey("We check that the running jobs are running and we have no timeout error\n", func() {
-					go taskManager.Run()
-					go timeout(observer.TestName, timeToRun*time.Duration(rightCount+1), timeoutErrorChannelStatus)
-
-					status := <-observer.StatusChannel
-					switch status {
-					case succeessChannelStatus:
-						log.Info().
-							Str("status", status).
-							Uint("total count", observer.Count).
-							Msgf("[%v: count %v]", testObj.Alias, observer.Tasks[testObj.Alias].Count)
-					case timeoutErrorChannelStatus:
-						log.Debug().Str("status", status).Uint("total count", observer.Count).Msg("")
-					}
-					convey.So(status, ShouldEqual, succeessChannelStatus)
-				})
-
-				db.Where("alias = ?", testObj.Alias).Delete(&task{})
+			taskManager, err := scheduler.NewWithConfig(db, scheduler.Config{
+				Sleep: scheduler.MinimalSleepDuration,
+				Jobs: scheduler.TaskSettings{
+					testObj.Alias: {
+						Interval: 1,
+						Func:     channelJob,
+						Args:     args,
+					},
+				},
 			})
-		})
-		Convey("\nWhen we want to make sure that the scheduler does not take tasks taken by another scheduler\n", func(convey C) {
-			test.Run("Main=check duplicate", func(t *testing.T) {
-				var timeCoef uint = 3
-				var wrongCount uint = 2
-				timeToRun := time.Duration(timeCoef) * time.Second
+			convey.Convey("We check that we have not have an error in the process of adding a task", func() {
+				convey.So(err, ShouldBeNil)
+			})
+			if err != nil {
+				return
+			}
 
-				testName := "Test run2 Alias " + createUniqueName()
-				args := scheduler.FuncArgs{
-					"name":       testName,
-					"duration":   timeToRun,
-					"wrongCount": wrongCount,
-				}
+			observer.TestName = testName
+			observer.StatusChannel = make(chan string, 10)
+			observer.Tasks = make(map[string]*observerTask)
+			observer.Count = 0
 
-				testObj := task{
-					Alias:       testName,
-					Name:        "Test2 run Name " + createUniqueName(),
-					Arguments:   args.String(),
-					ScheduledAt: time.Now().Add(timeToRun),
-				}
+			convey.Convey("We check that the running jobs are running and we have no timeout error\n", func() {
+				go taskManager.Run()
+				go timeout(observer.TestName, timeToRun*time.Duration(rightCount+1), timeoutErrorChannelStatus)
 
-				taskFuncsMap := scheduler.TaskFuncsMap{
-					testObj.Alias: channelJob,
-				}
-
-				taskManager := scheduler.New(db, &taskFuncsMap, timeToRun)
-				taskManager2 := scheduler.New(db, &taskFuncsMap, timeToRun)
-
-				err = taskManager.Add(
-					testObj.Alias,
-					testObj.Name,
-					args,
-					testObj.ScheduledAt,
-					timeCoef,
-				)
-				convey.Convey("We check that we have not have an error in the process of adding a task", func() {
-					convey.So(err, ShouldBeNil)
-				})
-				if err != nil {
-					return
-				}
-
-				observer.TestName = "Main=check duplicate"
-				observer.StatusChannel = make(chan string, 10)
-				observer.Tasks = make(map[string]*observerTask)
-				observer.Count = 0
-
-				convey.Convey("We check that for a certain time the task was completed only once with another scheduler running in parallel\n", func() {
-					go taskManager.Run()
-					go taskManager2.Run()
-					go timeout(observer.TestName, timeToRun+time.Duration(time.Second), succeessChannelStatus)
-
-					status := <-observer.StatusChannel
+				status := <-observer.StatusChannel
+				switch status {
+				case succeessChannelStatus:
 					log.Info().
-						Uint("last count", observer.Count).
-						Uint("wrong count value", wrongCount).
-						Msgf("status: %s", status)
-
-					convey.So(status, ShouldEqual, succeessChannelStatus)
-				})
-
-				db.Where("alias = ?", testObj.Alias).Delete(&task{})
+						Str("status", status).
+						Uint("total count", observer.Count).
+						Msgf("[%v: count %v]", testObj.Alias, observer.Tasks[testObj.Alias].Count)
+				case timeoutErrorChannelStatus:
+					log.Debug().Str("status", status).Uint("total count", observer.Count).Msg("")
+				}
+				convey.So(status, ShouldEqual, succeessChannelStatus)
 			})
+
+			db.Where("alias = ?", testObj.Alias).Delete(&task{})
+		})
+
+		Convey("\nWhen we want to make sure that scheduler tasks status correct saving\n", func(convey C) {
+			testName := "check status"
+			var timeCoef uint = 1
+			var rightCount uint = 2
+			timeToRun := time.Duration(timeCoef) * time.Second
+
+			taskName := "Test statuses"
+			taskName2 := "Test2 statuses"
+			taskManager, err := scheduler.NewWithConfig(db, scheduler.Config{
+				Sleep: scheduler.MinimalSleepDuration,
+				Jobs: scheduler.TaskSettings{
+					taskName: {
+						Interval: 1,
+						Func:     channelJob,
+						Args: scheduler.FuncArgs{
+							"name":       taskName,
+							"status":     scheduler.TaskStatusDeferred,
+							"duration":   timeToRun,
+							"rightCount": rightCount,
+						},
+					},
+					taskName2: {
+						Interval: 0,
+						Func:     channelJob,
+						Args: scheduler.FuncArgs{
+							"name":        taskName2,
+							"zeroTimeout": true,
+							"duration":    timeToRun,
+							"rightCount":  rightCount,
+						},
+					},
+				},
+			})
+
+			convey.Convey("We check that we have not have an error in the process of adding a task\n", func() {
+				convey.So(err, ShouldBeNil)
+			})
+			if err != nil {
+				return
+			}
+
+			observer.TestName = testName
+			observer.StatusChannel = make(chan string, 10)
+			observer.Tasks = map[string]*observerTask{
+				taskName:  {},
+				taskName2: {},
+			}
+			observer.Count = 0
+
+			convey.Convey("We check that the task is in the deferred status and is not taken on subsequent iterations and\nWe check that if the task has a zero interval and the executing function returns the interval \"nil\", then the task goes into the \"deferred\" status and will not be processed later\n", func() {
+				go taskManager.Run()
+				go timeout(observer.TestName, timeToRun*time.Duration(rightCount+1), succeessChannelStatus)
+
+				status := <-observer.StatusChannel
+				log.Print("hopa")
+				log.Info().
+					Str("status", status).
+					Uint("total count", observer.Count).
+					Msgf("[%v: count %v, %v: count %v]", taskName, observer.Tasks[taskName].Count, taskName2, observer.Tasks[taskName2].Count)
+
+				convey.So(observer.Tasks[taskName].Count, ShouldEqual, 1)
+				convey.So(observer.Tasks[taskName2].Count, ShouldEqual, 1)
+			})
+
+			db.Where("alias = ?", taskName).Delete(&task{})
+			db.Where("alias = ?", taskName2).Delete(&task{})
+		})
+
+		Convey("\nWhen we want to make sure that the scheduler does not take tasks taken by another scheduler\n", func(convey C) {
+			testName := "db lock task"
+			const timeCoef uint = 1
+			const taskManagersCount uint = 10
+
+			const wrongCount uint = taskManagersCount + 1
+			const timeToRun = time.Duration(timeCoef) * time.Second
+			const sleep = scheduler.MinimalSleepDuration
+
+			taskName := "Test duplicate run with config"
+			args := scheduler.FuncArgs{
+				"name":     taskName,
+				"duration": timeToRun,
+				"tmCount":  taskManagersCount,
+			}
+
+			testObj := task{
+				Alias:       taskName,
+				ScheduledAt: time.Now().Add(timeToRun),
+				Arguments:   args.String(),
+			}
+
+			taskManagers := [taskManagersCount]*scheduler.TaskManager{}
+			taskManagers[0], err = scheduler.NewWithConfig(db, scheduler.Config{
+				Sleep: sleep,
+				Jobs: scheduler.TaskSettings{
+					testObj.Alias: {
+						Interval: 1,
+						Func:     channelJob,
+						Args:     args,
+						RunAt:    testObj.ScheduledAt,
+					},
+				},
+			})
+			convey.Convey("We check that we have not have an error in the process of adding a task", func() {
+				convey.So(err, ShouldBeNil)
+			})
+			if err != nil {
+				return
+			}
+			for i := 1; i < int(taskManagersCount); i++ {
+				taskManagers[i] = scheduler.New(
+					db,
+					&scheduler.TaskFuncsMap{
+						testObj.Alias: channelJob,
+					},
+					sleep,
+				)
+			}
+			log.Print("task managers count: ", len(taskManagers))
+
+			observer.TestName = testName
+			observer.StatusChannel = make(chan string, 10)
+			observer.Tasks = make(map[string]*observerTask)
+			observer.Count = 0
+
+			convey.Convey("We check that for a certain time the task was completed only once with another scheduler running in parallel\n", func() {
+				for _, item := range taskManagers {
+					go item.Run()
+				}
+				go timeout(observer.TestName, timeToRun+sleep, succeessChannelStatus)
+
+				status := <-observer.StatusChannel
+				log.Info().
+					Uint("last count", observer.Count).
+					Uint("wrong count value", wrongCount).
+					Msgf("status: %s", status)
+
+				convey.So(wrongCount, ShouldBeGreaterThan, observer.Count)
+			})
+
+			db.Where("alias = ?", testObj.Alias).Delete(&task{})
 		})
 	})
 }
@@ -296,7 +363,6 @@ func channelJob(args scheduler.FuncArgs) (status scheduler.TaskStatus, when inte
 			observer.Tasks[nameStr].Count++
 		} else {
 			observer.Tasks[nameStr] = &observerTask{
-				Name:  nameStr,
 				Count: 1,
 			}
 		}
@@ -307,24 +373,6 @@ func channelJob(args scheduler.FuncArgs) (status scheduler.TaskStatus, when inte
 
 	observer.Count++
 
-	wrongCountI, checkWrong := args["wrongCount"]
-	if checkWrong {
-		wrongCount := wrongCountI.(float64)
-		if observer.Count >= uint(wrongCount) {
-			observer.StatusChannel <- wrongCountChannelStatus
-		}
-	}
-
-	rightCountI, ok := args["rightCount"]
-	if ok {
-		rightCount := rightCountI.(float64)
-		if observer.Count >= uint(rightCount) {
-			observer.StatusChannel <- succeessChannelStatus
-		}
-	} else if !checkWrong {
-		observer.StatusChannel <- succeessChannelStatus
-	}
-
 	durationI, ok := args["duration"]
 	var dur time.Duration
 	if ok {
@@ -334,18 +382,49 @@ func channelJob(args scheduler.FuncArgs) (status scheduler.TaskStatus, when inte
 		dur = scheduler.DefaultSleepDuration
 	}
 
+	when = time.Now().Add(dur)
+	tmCountI, checkTM := args["tmCount"]
+	_, checkZeroTime := args["zeroTimeout"]
+	if checkTM {
+		tmCountF := tmCountI.(float64)
+		if observer.Count <= uint(tmCountF) {
+			log.Print("curr count: ", observer.Count)
+			when = time.Now()
+		}
+	} else if checkZeroTime {
+		when = nil
+	}
+
+	rightCountI, ok := args["rightCount"]
+	if ok {
+		rightCount := rightCountI.(float64)
+		if observer.Count >= uint(rightCount) {
+			observer.StatusChannel <- succeessChannelStatus
+		}
+	} else if !checkTM {
+		observer.StatusChannel <- succeessChannelStatus
+	}
+
+	stI, ok := args["status"]
+	if ok {
+		log.Print("status: ", status)
+		stF := stI.(float64)
+		status = scheduler.TaskStatus(stF)
+	}
+
 	if hasName {
 		log.Info().Str("alias", nameStr).Msg("Channel job finish")
 	} else {
 		log.Info().Msg("Channel job finish")
 	}
-	return scheduler.TaskStatusWait, time.Now().Add(dur)
+
+	return status, when
 }
 
 func baseJob(args scheduler.FuncArgs) (status scheduler.TaskStatus, when interface{}) {
 	log.Info().Msg("Print base job")
 
-	return scheduler.TaskStatusWait, time.Now().Add(time.Minute * 1)
+	return status, time.Now().Add(1 * time.Second)
 }
 
 func timeout(testName string, dur time.Duration, returnType string) {

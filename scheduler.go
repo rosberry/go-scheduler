@@ -54,6 +54,7 @@ type (
 		Func     TaskFunc
 		Args     FuncArgs
 		Interval uint
+		RunAt    time.Time
 	}
 
 	// TaskFunc type func by task
@@ -93,7 +94,7 @@ func New(db *gorm.DB, funcs *TaskFuncsMap, sleepDuration time.Duration) *TaskMan
 }
 
 // New TaskManager with config
-func NewWithConfig(db *gorm.DB, c Config) *TaskManager {
+func NewWithConfig(db *gorm.DB, c Config) (*TaskManager, error) {
 	taskFuncsMap := TaskFuncsMap{}
 
 	for alias, item := range c.Jobs {
@@ -102,32 +103,40 @@ func NewWithConfig(db *gorm.DB, c Config) *TaskManager {
 
 	taskManager := New(db, &taskFuncsMap, c.Sleep)
 
-	taskManager.SetTasks(c.Jobs)
+	err := taskManager.SetTasks(c.Jobs)
+	if err != nil {
+		return nil, err
+	}
 
-	return taskManager
+	return taskManager, nil
 }
 
 // Configure add (or update if exist) tasks to TaskManager from TaskSettings
-func (tm *TaskManager) SetTasks(ts TaskSettings) {
+func (tm *TaskManager) SetTasks(ts TaskSettings) (err error) {
 	for alias, item := range ts {
 		if _, ok := tm.funcs[alias]; ok {
 			var task Task
 
-			tm.db.FirstOrInit(&task, Task{Alias: alias})
+			err = tm.db.FirstOrInit(&task, Task{Alias: alias}).Error
 
 			argsStr := item.Args.String()
 
 			if task.ID == 0 { // Add
 				task.Schedule = item.Interval
 				task.Status = TaskStatusWait
-				task.ScheduledAt = time.Now()
 				task.Singleton = true
+
+				scheduledAt := time.Now()
+				if !item.RunAt.IsZero() {
+					scheduledAt = item.RunAt
+				}
+				task.ScheduledAt = scheduledAt
 				// save arguments if exist literal initialization and map not empty
 				if item.Args != nil && len(item.Args) > 0 {
 					task.Arguments = argsStr
 				}
 
-				tm.db.Save(&task)
+				err = tm.db.Save(&task).Error
 			} else { // update
 				updateMap := make(map[string]interface{})
 				if task.Schedule != item.Interval {
@@ -143,12 +152,13 @@ func (tm *TaskManager) SetTasks(ts TaskSettings) {
 				}
 				if len(updateMap) > 0 {
 					go func() {
-						tm.db.Model(task).Updates(updateMap)
+						err = tm.db.Model(task).Updates(updateMap).Error
 					}()
 				}
 			}
 		}
 	}
+	return err
 }
 
 // Configure add (or update if exist) tasks to TaskManager from TaskPlan
