@@ -22,11 +22,11 @@ func main() {
 
 	// Create FuncsMap and add our TaskFunc's
 	taskFuncsMap := scheduler.TaskFuncsMap{
-		"upd_print":     PrintJobSingletone,
+		"upd_print":     PrintJobSingleton,
 		"upd_printName": PrintWithArgs,
 	}
 
-	// Init TaskPlan for Singletone functions
+	// Init TaskPlan for Singleton functions
 	taskPlan := scheduler.TaskPlan{
 		"upd_print": 5,
 	}
@@ -34,7 +34,7 @@ func main() {
 	// Init scheduler
 	sch := scheduler.New(db, &taskFuncsMap, sleepDuration) // gorm db in first func argument
 
-	// Add to DB and configure singletone tasks
+	// Add to DB and configure singleton tasks
 	sch.Configure(taskPlan)
 
 	// Run scheduler
@@ -57,9 +57,9 @@ func main() {
 }
 
 // Create schedule TaskFunc's
-// PrintJobSingletone ...
-func PrintJobSingletone(args scheduler.FuncArgs) (status scheduler.TaskStatus, when interface{}) {
-	log.Println("PrintJobSingletone:", time.Now())
+// PrintJobSingleton ...
+func PrintJobSingleton(args scheduler.FuncArgs) (status scheduler.TaskStatus, when interface{}) {
+	log.Println("PrintJobSingleton:", time.Now())
 
 	return scheduler.TaskStatusWait, time.Now().Add(time.Minute * 1)
 }

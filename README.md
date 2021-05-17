@@ -34,8 +34,8 @@ type Task struct {
 
 ```golang
 
-func PrintJobSingletone(args scheduler.FuncArgs) (status scheduler.TaskStatus, when interface{}) {
-	log.Println("PrintJobSingletone:", time.Now())
+func PrintJobSingleton(args scheduler.FuncArgs) (status scheduler.TaskStatus, when interface{}) {
+	log.Println("PrintJobSingleton:", time.Now())
 
 	return scheduler.TaskStatusWait, time.Now().Add(time.Minute * 1)
 }
@@ -43,7 +43,7 @@ func PrintJobSingletone(args scheduler.FuncArgs) (status scheduler.TaskStatus, w
 // in the running script
 ...
 taskFuncsMap := scheduler.TaskFuncsMap{
-	"upd_print": PrintJobSingletone,
+	"upd_print": PrintJobSingleton,
 }
 ```
 
@@ -98,11 +98,11 @@ func main() {
 
 	// Create FuncsMap and add our TaskFunc's
 	taskFuncsMap := scheduler.TaskFuncsMap{
-		"upd_print":     PrintJobSingletone,
+		"upd_print":     PrintJobSingleton,
 		"upd_printName": PrintWithArgs,
 	}
 
-	// Init TaskPlan for Singletone functions
+	// Init TaskPlan for Singleton functions
 	taskPlan := scheduler.TaskPlan{
 		"upd_print": updPrintScheduleTimeout,
 	}
@@ -110,7 +110,7 @@ func main() {
 	// Init scheduler
 	sch := scheduler.New(db, &taskFuncsMap, sleepDuration) // gorm db in first func argument
 
-	// Add to DB and configure singletone tasks
+	// Add to DB and configure singleton tasks
 	sch.Configure(taskPlan)
 
 	// Run scheduler
@@ -133,9 +133,9 @@ func main() {
 }
 
 // Create schedule TaskFunc's
-// PrintJobSingletone ...
-func PrintJobSingletone(args scheduler.FuncArgs) (status scheduler.TaskStatus, when interface{}) {
-	log.Println("PrintJobSingletone:", time.Now())
+// PrintJobSingleton ...
+func PrintJobSingleton(args scheduler.FuncArgs) (status scheduler.TaskStatus, when interface{}) {
+	log.Println("PrintJobSingleton:", time.Now())
 
 	return scheduler.TaskStatusWait, time.Now().Add(time.Minute * 1)
 }
@@ -155,8 +155,8 @@ func PrintWithArgs(args scheduler.FuncArgs) (status scheduler.TaskStatus, when i
 
 # Task types
 
-- Singletone - unique task, can be only one task with alias in DB.
-- Not singletone - dynamic task, that can be created while the program is running, supports arguments, there can be several tasks in the database with one alias.
+- Singleton - unique task, can be only one task with alias in DB.
+- Not singleton - dynamic task, that can be created while the program is running, supports arguments, there can be several tasks in the database with one alias.
 
 # Roadmap
 
