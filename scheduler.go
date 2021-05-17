@@ -45,6 +45,7 @@ type (
 
 	// Aggregate config for new scheduler
 	Config struct {
+		Db    *gorm.DB
 		Sleep time.Duration
 		Jobs  TaskSettings
 	}
@@ -94,14 +95,14 @@ func New(db *gorm.DB, funcs *TaskFuncsMap, sleepDuration time.Duration) *TaskMan
 }
 
 // New TaskManager with config
-func NewWithConfig(db *gorm.DB, c Config) (*TaskManager, error) {
+func NewWithConfig(c Config) (*TaskManager, error) {
 	taskFuncsMap := TaskFuncsMap{}
 
 	for alias, item := range c.Jobs {
 		taskFuncsMap[alias] = item.Func
 	}
 
-	taskManager := New(db, &taskFuncsMap, c.Sleep)
+	taskManager := New(c.Db, &taskFuncsMap, c.Sleep)
 
 	err := taskManager.SetTasks(c.Jobs)
 	if err != nil {

@@ -168,7 +168,8 @@ func TestStart(test *testing.T) {
 				Arguments: args.String(),
 			}
 
-			taskManager, err := scheduler.NewWithConfig(db, scheduler.Config{
+			taskManager, err := scheduler.NewWithConfig(scheduler.Config{
+				Db:    db,
 				Sleep: scheduler.MinimalSleepDuration,
 				Jobs: scheduler.TaskSettings{
 					testObj.Alias: {
@@ -218,7 +219,8 @@ func TestStart(test *testing.T) {
 
 			taskName := "Test statuses"
 			taskName2 := "Test2 statuses"
-			taskManager, err := scheduler.NewWithConfig(db, scheduler.Config{
+			taskManager, err := scheduler.NewWithConfig(scheduler.Config{
+				Db:    db,
 				Sleep: scheduler.MinimalSleepDuration,
 				Jobs: scheduler.TaskSettings{
 					taskName: {
@@ -301,7 +303,8 @@ func TestStart(test *testing.T) {
 			}
 
 			taskManagers := [taskManagersCount]*scheduler.TaskManager{}
-			taskManagers[0], err = scheduler.NewWithConfig(db, scheduler.Config{
+			taskManagers[0], err = scheduler.NewWithConfig(scheduler.Config{
+				Db:    db,
 				Sleep: sleep,
 				Jobs: scheduler.TaskSettings{
 					testObj.Alias: {
