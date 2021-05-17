@@ -72,7 +72,7 @@ func TestStart(test *testing.T) {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	}
 
-	Convey("Given db connection settings", test, func(convey C) {
+	Convey("Given db connection settings", test, func() {
 		connString := os.Getenv("DB_CONNECT_STRING")
 		db, err := gorm.Open(postgres.Open(connString), &gorm.Config{})
 		if err != nil {
@@ -81,20 +81,20 @@ func TestStart(test *testing.T) {
 		}
 		abortProcess := false
 
-		Convey("\nWhen we want to check table with tasks and we want check this table correct structure\n", func(convey C) {
+		Convey("\nWhen we want to check table with tasks and we want check this table correct structure\n", func() {
 			err := db.Select(arrColNames).Find(&task{}).Error
 			if err != nil {
 				abortProcess = true
 			}
-			convey.Convey("Database errors should be free", func() {
-				convey.So(err, ShouldBeNil)
+			Convey("Database errors should be free", func() {
+				So(err, ShouldBeNil)
 			})
 		})
 		if abortProcess {
 			return
 		}
 
-		Convey("\nWhen we want to make sure that the task is correct created in the database\n", func(convey C) {
+		Convey("\nWhen we want to make sure that the task is correct created in the database\n", func() {
 			timeToRun := time.Second * 10
 			args := scheduler.FuncArgs{
 				"arg1": 1,
@@ -121,8 +121,8 @@ func TestStart(test *testing.T) {
 				0,
 			)
 
-			convey.Convey("We check that we have not have an error in the process of adding a task", func() {
-				convey.So(err, ShouldBeNil)
+			Convey("We check that we have not have an error in the process of adding a task", func() {
+				So(err, ShouldBeNil)
 			})
 			if err != nil {
 				return
@@ -134,23 +134,23 @@ func TestStart(test *testing.T) {
 				"name":      testObj.Name,
 				"arguments": testObj.Arguments,
 			}).First(respTask).Error
-			convey.Convey("We check that we have not have an error in the process of getting a task in database", func() {
-				convey.So(err, ShouldBeNil)
+			Convey("We check that we have not have an error in the process of getting a task in database", func() {
+				So(err, ShouldBeNil)
 			})
 			if err != nil {
 				return
 			}
 
-			convey.Convey("We expect that the test execution time of the task corresponds to the value of the task execution time from the database, accurate to the second", func() {
+			Convey("We expect that the test execution time of the task corresponds to the value of the task execution time from the database, accurate to the second", func() {
 				testTime := testObj.ScheduledAt.Round(time.Second)
 				respTime := respTask.ScheduledAt.Round(time.Second)
-				convey.So(testTime, ShouldEqual, respTime)
+				So(testTime, ShouldEqual, respTime)
 			})
 
 			db.Where("alias = ?", testObj.Alias).Delete(&task{})
 		})
 
-		Convey("\nWhen we want to make sure that scheduler base run is correct\n", func(convey C) {
+		Convey("\nWhen we want to make sure that scheduler base run is correct\n", func() {
 			testName := "simple run"
 			const timeCoef uint = 3
 			const rightCount uint = 2
@@ -178,8 +178,8 @@ func TestStart(test *testing.T) {
 					},
 				},
 			})
-			convey.Convey("We check that we have not have an error in the process of adding a task", func() {
-				convey.So(err, ShouldBeNil)
+			Convey("We check that we have not have an error in the process of adding a task", func() {
+				So(err, ShouldBeNil)
 			})
 			if err != nil {
 				return
@@ -190,7 +190,7 @@ func TestStart(test *testing.T) {
 			observer.Tasks = make(map[string]*observerTask)
 			observer.Count = 0
 
-			convey.Convey("We check that the running jobs are running and we have no timeout error\n", func() {
+			Convey("We check that the running jobs are running and we have no timeout error\n", func() {
 				go taskManager.Run()
 				go timeout(observer.TestName, timeToRun*time.Duration(rightCount+1), timeoutErrorChannelStatus)
 
@@ -204,13 +204,13 @@ func TestStart(test *testing.T) {
 				case timeoutErrorChannelStatus:
 					log.Debug().Str("status", status).Uint("total count", observer.Count).Msg("")
 				}
-				convey.So(status, ShouldEqual, succeessChannelStatus)
+				So(status, ShouldEqual, succeessChannelStatus)
 			})
 
 			db.Where("alias = ?", testObj.Alias).Delete(&task{})
 		})
 
-		Convey("\nWhen we want to make sure that scheduler tasks status correct saving\n", func(convey C) {
+		Convey("\nWhen we want to make sure that scheduler tasks status correct saving\n", func() {
 			testName := "check status"
 			var timeCoef uint = 1
 			var rightCount uint = 2
@@ -244,8 +244,8 @@ func TestStart(test *testing.T) {
 				},
 			})
 
-			convey.Convey("We check that we have not have an error in the process of adding a task\n", func() {
-				convey.So(err, ShouldBeNil)
+			Convey("We check that we have not have an error in the process of adding a task\n", func() {
+				So(err, ShouldBeNil)
 			})
 			if err != nil {
 				return
@@ -259,7 +259,7 @@ func TestStart(test *testing.T) {
 			}
 			observer.Count = 0
 
-			convey.Convey("We check that the task is in the deferred status and is not taken on subsequent iterations and\nWe check that if the task has a zero interval and the executing function returns the interval \"nil\", then the task goes into the \"deferred\" status and will not be processed later\n", func() {
+			Convey("We check that the task is in the deferred status and is not taken on subsequent iterations and\nWe check that if the task has a zero interval and the executing function returns the interval \"nil\", then the task goes into the \"deferred\" status and will not be processed later\n", func() {
 				go taskManager.Run()
 				go timeout(observer.TestName, timeToRun*time.Duration(rightCount+1), succeessChannelStatus)
 
@@ -270,15 +270,15 @@ func TestStart(test *testing.T) {
 					Uint("total count", observer.Count).
 					Msgf("[%v: count %v, %v: count %v]", taskName, observer.Tasks[taskName].Count, taskName2, observer.Tasks[taskName2].Count)
 
-				convey.So(observer.Tasks[taskName].Count, ShouldEqual, 1)
-				convey.So(observer.Tasks[taskName2].Count, ShouldEqual, 1)
+				So(observer.Tasks[taskName].Count, ShouldEqual, 1)
+				So(observer.Tasks[taskName2].Count, ShouldEqual, 1)
 			})
 
 			db.Where("alias = ?", taskName).Delete(&task{})
 			db.Where("alias = ?", taskName2).Delete(&task{})
 		})
 
-		Convey("\nWhen we want to make sure that the scheduler does not take tasks taken by another scheduler\n", func(convey C) {
+		Convey("\nWhen we want to make sure that the scheduler does not take tasks taken by another scheduler\n", func() {
 			testName := "db lock task"
 			const timeCoef uint = 1
 			const taskManagersCount uint = 10
@@ -312,8 +312,8 @@ func TestStart(test *testing.T) {
 					},
 				},
 			})
-			convey.Convey("We check that we have not have an error in the process of adding a task", func() {
-				convey.So(err, ShouldBeNil)
+			Convey("We check that we have not have an error in the process of adding a task", func() {
+				So(err, ShouldBeNil)
 			})
 			if err != nil {
 				return
@@ -334,7 +334,7 @@ func TestStart(test *testing.T) {
 			observer.Tasks = make(map[string]*observerTask)
 			observer.Count = 0
 
-			convey.Convey("We check that for a certain time the task was completed only once with another scheduler running in parallel\n", func() {
+			Convey("We check that for a certain time the task was completed only once with another scheduler running in parallel\n", func() {
 				for _, item := range taskManagers {
 					go item.Run()
 				}
@@ -346,7 +346,7 @@ func TestStart(test *testing.T) {
 					Uint("wrong count value", wrongCount).
 					Msgf("status: %s", status)
 
-				convey.So(wrongCount, ShouldBeGreaterThan, observer.Count)
+				So(wrongCount, ShouldBeGreaterThan, observer.Count)
 			})
 
 			db.Where("alias = ?", testObj.Alias).Delete(&task{})
