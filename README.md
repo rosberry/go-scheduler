@@ -47,7 +47,7 @@ taskFuncsMap := scheduler.TaskFuncsMap{
 }
 ```
 
-4. Initialize the scheduler. gorm db in first function argument. The second argument is the `taskFuncMap` map declared earlier. The third argument is the time interval between checking tasks. By default it is 30 seconds and can be set up no less than this value.
+4. Initialize the scheduler. gorm db in first function argument. The second argument is the `taskFuncMap` map declared earlier. The third argument is the time interval between checking tasks. By default it is 1 second and can be set up no less than this value.
 
 ```golang
 sch := scheduler.New(db, &taskFuncsMap, sleepDuration)
