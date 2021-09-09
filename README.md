@@ -38,8 +38,9 @@ sch := scheduler.New(
 
 go sch.Run()
 ```
+
 ## Additional usage
-You can also add a static interval for the execution of tasks. If a time is specified for a task, then it will be singleton.
+You can add a static interval for the execution of tasks. If a time is specified for a task, then it will be singleton.
 
 ```golang
 taskPlan := scheduler.TaskPlan{
@@ -49,7 +50,22 @@ sch.Configure(taskPlan)
 // ...
 go sch.Run()
 ```
-You can also create your task model for scheduler migration. To do this, make sure your structure meets the minimum requirements of the basic scheduler structure:
+
+You can add a dynamic tasks adding code after running scheduler.
+
+```golang
+go sch.Run()
+// ...
+sch.Add(
+	"upd_print", // alias
+	"upd_print_1", // current name
+	scheduler.FuncArgs{ "name": "Ivan" }, // arguments
+	time.Now().Add(time.Second*10), // runAt
+	5, // interval in minutes
+)
+```
+
+You can create your task model for scheduler migration. To do this, make sure your structure meets the minimum requirements of the basic scheduler structure:
 ```golang
 type Task struct {
     ID    uint `gorm:"primary_key"`
