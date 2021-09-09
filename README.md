@@ -49,7 +49,23 @@ sch.Configure(taskPlan)
 // ...
 go sch.Run()
 ```
-You can also create your task model for scheduler migration. To do this, make sure your structure meets the minimum requirements of the basic scheduler structure:
+You can simple inintialize scheduler with singleton and arguments:
+```golang
+sch, err := scheduler.NewWithConfig(scheduler.Config{
+	Db:    db,
+	Jobs: scheduler.TaskSettings{
+		testObj.Alias: {
+			Interval: 5, // 5 minutes
+			Func:     printFunc, // job func
+			Args: scheduler.FuncArgs{
+				"name": "print",
+			},
+		},
+	},
+	Sleep: scheduler.MinimalSleepDuration,
+})
+```
+You can create your task model for scheduler migration. To do this, make sure your structure meets the minimum requirements of the basic scheduler structure:
 ```golang
 type Task struct {
     ID    uint `gorm:"primary_key"`
