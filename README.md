@@ -3,16 +3,53 @@
 This is a library to handle scheduled tasks.
 The task list is stored in the database (GORM).
 
-# Usage
+## Base usage
 
 1. Import the library.
 
 ```golang
 import "github.com/rosberry/go-scheduler"
 ```
+2. Use `gorm` ORM library to work with the database in the scheduler. You make use structure `scheduler.Task` for create migration.
+```golang
+tx := db.Begin()
+tx.Migrator().AutoMigrate(&scheduler.Task{})
+```
 
-2. Use `gorm` ORM library to work with the database in the scheduler, create a model according to the example below and roll the migrations.
+3. Initialize the scheduler with 3 arguments: `gorm db`, `taskFuncMap`, `sleepDuration`.<br> 
+`gorm db`: instance `*gorm.DB` in gorm library.<br>
+`taskFuncMap`: Before adding argument we should create schedule function(s) and add them to the special map `scheduler.TaskFuncsMap`. Each function must return 2 parameters. The first is the status after the completion of the task. Possible options: `TaskStatusDone`, `TaskStatusWait`, `TaskStatusDeferred`. The second is how long it will take to call this task again. The passed types can be: `time.Duration`, `time.Time` or `nil`. If the time was not transmitted (nil was used), then we will use the static values stored in the database for this task. More on this later.<br>
+`sleepDuration`: time interval between checking tasks. By default it is 30 seconds and can be set up no less than this value.
+```golang
+printFunc := func(args scheduler.FuncArgs) (scheduler.TaskStatus, interface{}) {
+	log.Print("Hello scheduler!")
+	nextStart := time.Now().Add(time.Minute * 1)
 
+	return scheduler.TaskStatusWait, nextStart
+}
+
+sch := scheduler.New(
+	db, // gorm db
+	&scheduler.TaskFuncsMap{
+		"print": printFunc,
+	}, 
+	time.Minute * 5, // sleep duration
+)
+
+go sch.Run()
+```
+## Additional usage
+You can also add a static interval for the execution of tasks. If a time is specified for a task, then it will be singleton.
+
+```golang
+taskPlan := scheduler.TaskPlan{
+	"print": 5, // 5 minutes
+}
+sch.Configure(taskPlan)
+// ...
+go sch.Run()
+```
+You can also create your task model for scheduler migration. To do this, make sure your structure meets the minimum requirements of the basic scheduler structure:
 ```golang
 type Task struct {
     ID    uint `gorm:"primary_key"`
@@ -30,45 +67,8 @@ type Task struct {
     UpdatedAt time.Time
 }
 ```
-3. Create schedule functions and add them to the special map `scheduler.TaskFuncsMap`. Each function must return 2 parameters. The first is the status after the completion of the task. Possible options: `TaskStatusDone`, `TaskStatusWait`, `TaskStatusDeferred`. The second is how long it will take to call this task again. The passed types can be: `time.Duration`, `time.Time` or `nil`. If the time was not transmitted (nil was used), then we will use the static values stored in the database for this task. More on this later.
 
-```golang
-
-func PrintJobSingletone(args scheduler.FuncArgs) (status scheduler.TaskStatus, when interface{}) {
-	log.Println("PrintJobSingletone:", time.Now())
-
-	return scheduler.TaskStatusWait, time.Now().Add(time.Minute * 1)
-}
-
-// in the running script
-...
-taskFuncsMap := scheduler.TaskFuncsMap{
-	"upd_print": PrintJobSingletone,
-}
-```
-
-4. Initialize the scheduler. gorm db in first function argument. The second argument is the `taskFuncMap` map declared earlier. The third argument is the time interval between checking tasks. By default it is 30 seconds and can be set up no less than this value.
-
-```golang
-sch := scheduler.New(db, &taskFuncsMap, sleepDuration)
-```
-
-5. You can add a static interval for the execution of tasks. If a time is specified for a task, then it will be singleton.
-
-```golang
-taskPlan := scheduler.TaskPlan{
-	"upd_print": updPrintScheduleTimeout,
-}
-sch.Configure(taskPlan)
-```
-
-6. run scheduler in go routine
-
-```golang
-go sch.Run()
-```
-
-Full example:
+## Full example:
 ```golang
 package main
 
