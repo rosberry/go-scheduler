@@ -7,5 +7,5 @@ require (
 	github.com/rs/zerolog v1.15.0
 	github.com/smartystreets/goconvey v1.6.4
 	gorm.io/driver/postgres v1.0.8
-	gorm.io/gorm v1.21.3
+	github.com/jinzhu/gorm v1.9.16
 )
